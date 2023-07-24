@@ -3,7 +3,7 @@ mkdir -p fimo_out
 for i in *.meme; do
 fimo --oc fimo_out_${i%.meme} --verbosity 1 --bfile --motif-- --thresh 1.0E-4 \
 --parse-genomic-coord $i \
-/mnt/c/Users/jsahn/Documents/BIOINFORMATICS/motif/promoter/KBTBD6/seq/All_-2000TSS_+1000TSS_KBTBD6.fa
+All_-2000TSS_+1000TSS_KBTBD6.fa
 
 mv fimo_out_* fimo_out
 grep -v '^#\|^$' fimo_out/fimo_out_${i%.meme}/fimo.tsv > fimo_out/fimo_out_${i%.meme}/fimo_clean.tsv
