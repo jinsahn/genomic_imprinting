@@ -1,0 +1,95 @@
+#############################################
+
+# Workflow of motif analysis
+
+#############################################
+
+
+# 1. Run MEME for de novo motif discovery and check the number of motifs with E-value < 0.05:
+#  livestock
+cd /path/to/1st/fasta/file
+meme All_livestock-2000TSS_+1000TSS_KBTBD6.fa -dna -mod zoops -nmotifs 100 \
+-maxw 50 \
+-o meme_livestock_100
+
+#  non-livestock
+cd /path/to/2nd/fasta/file
+meme All_nonlivestock-2000TSS_+1000TSS_KBTBD6.fa -dna -mod zoops -nmotifs 100 \
+-maxw 50 \
+-o meme_nonlivestock_100
+
+
+# 2. Rerun MEME for de novo motif discovery to obtain only E-value < 0.05:
+#  livestock
+cd /path/to/1st/fasta/file
+meme All_livestock-2000TSS_+1000TSS_KBTBD6.fa -dna -mod zoops -nmotifs 41 \
+-maxw 50 \
+-o meme_livestock_41
+
+#  non-livestock
+cd /path/to/2nd/fasta/file
+meme All_nonlivestock-2000TSS_+1000TSS_KBTBD6.fa -dna -mod zoops -nmotifs 55 \
+-maxw 50 \
+-o meme_nonlivestock_55
+
+
+# 3. Run TOMTOM for motif comparison (group 1 vs group 2):
+cd /path/to/2nd/fasta/file/meme_nonlivestock_55
+# run xml2meme.py to convert meme.xml to meme.meme
+
+cd /path/to/1st/fasta/file/meme_livestock_41
+tomtom -o tomtom_out_liveVsNon -dist pearson -evalue -thresh 10.0 \
+meme.xml \
+/path/to/2nd/fasta/file/meme_nonlivestock_55/meme.meme
+
+
+# 4. Extract ^MOTIF and find matched motifs, and the extract unique motifs for group 1 for a table
+cd /path/to/1st/fasta/file/meme_livestock_41
+grep -A1 '^MOTIF' meme.txt | grep -v '^\*\*\*\*\*\*\*\*\*\*\*\*\*\*\*\*\*\*\*\*\*\*\*\*\*\*\*\*\*\*\*\*\*\*\*\*\*\*\*\*\*\*\*\*\*\*\*\*\*\*\*\*\*\*' | grep -v '^--$' > meme_list.txt
+# make 7 columns
+# manually match motifs (q-value < 0.05) in tomtom_out_liveVsNon/tomtom.tsv and extract non-matched (unique) motifs for group 1 (21 motifs in this case).
+
+
+# 5. Extract ^MOTIF from group 2 also for a table
+cd /path/to/2nd/fasta/file/meme_nonlivestock_55
+grep -A1 '^MOTIF' meme.txt | grep -v '^\*\*\*\*\*\*\*\*\*\*\*\*\*\*\*\*\*\*\*\*\*\*\*\*\*\*\*\*\*\*\*\*\*\*\*\*\*\*\*\*\*\*\*\*\*\*\*\*\*\*\*\*\*\*' | grep -v '^--$' > meme_list.txt
+# make 7 columns
+
+
+# 6. Another TOMTOM for comparison of unique motifs from group 1 to databases
+# Remove non-unique motifs of group 1 from xml and obtain uniq_motif.xml
+cd /path/to/1st/fasta/file/meme_livestock_41
+xmlstarlet ed --pf -d "//motif[@alt='MEME-2']" meme.xml > meme2.xml
+xmlstarlet ed --pf -d "//motif[@alt='MEME-4']" meme2.xml > meme4.xml
+xmlstarlet ed --pf -d "//motif[@alt='MEME-6']" meme4.xml > meme6.xml
+xmlstarlet ed --pf -d "//motif[@alt='MEME-7']" meme6.xml > meme7.xml
+xmlstarlet ed --pf -d "//motif[@alt='MEME-9']" meme7.xml > meme9.xml
+xmlstarlet ed --pf -d "//motif[@alt='MEME-12']" meme9.xml > meme12.xml
+xmlstarlet ed --pf -d "//motif[@alt='MEME-13']" meme12.xml > meme13.xml
+xmlstarlet ed --pf -d "//motif[@alt='MEME-14']" meme13.xml > meme14.xml
+xmlstarlet ed --pf -d "//motif[@alt='MEME-18']" meme14.xml > meme18.xml
+xmlstarlet ed --pf -d "//motif[@alt='MEME-19']" meme18.xml > meme19.xml
+xmlstarlet ed --pf -d "//motif[@alt='MEME-23']" meme19.xml > meme23.xml
+xmlstarlet ed --pf -d "//motif[@alt='MEME-25']" meme23.xml > meme25.xml
+xmlstarlet ed --pf -d "//motif[@alt='MEME-26']" meme25.xml > meme26.xml
+xmlstarlet ed --pf -d "//motif[@alt='MEME-28']" meme26.xml > meme28.xml
+xmlstarlet ed --pf -d "//motif[@alt='MEME-32']" meme28.xml > meme32.xml
+xmlstarlet ed --pf -d "//motif[@alt='MEME-33']" meme32.xml > meme33.xml
+xmlstarlet ed --pf -d "//motif[@alt='MEME-34']" meme33.xml > meme34.xml
+xmlstarlet ed --pf -d "//motif[@alt='MEME-35']" meme34.xml > meme35.xml
+xmlstarlet ed --pf -d "//motif[@alt='MEME-37']" meme35.xml > meme37.xml
+xmlstarlet ed --pf -d "//motif[@alt='MEME-39']" meme37.xml > meme39.xml
+mv meme39.xml uniq_motif.xml
+
+# xml vs .meme and then find q-value < 0.05
+tomtom -oc tomtom_out_uniqVsDb -dist pearson -evalue -thresh 10.0 -min-overlap 5 -verbosity 1 \
+uniq_motif.xml \
+/mnt/c/Users/jsahn/Documents/BIOINFORMATICS/motif/meme/motif_databases.12/motif_databases/JASPAR/JASPAR2022_CORE_vertebrates_non-redundant_v2.meme \
+/mnt/c/Users/jsahn/Documents/BIOINFORMATICS/motif/meme/motif_databases.12/motif_databases/EUKARYOTE/jolma2013.meme
+
+
+
+
+
+
+
