@@ -1,0 +1,96 @@
+###################################################################################
+# An example workflow for WGBS 
+# to run in a supercomputer with a SLURM-based system
+
+###################################################################################
+
+
+##################################################################
+# QC
+##################################################################
+#!/bin/bash
+#SBATCH --account=acc_name
+#SBATCH --job-name=fastqc
+#SBATCH --time=01:30:00
+#SBATCH --nodes=1 --ntasks-per-node=16
+ml fastqc/0.11.8
+cd $SLURM_SUBMIT_DIR
+cp SRR*_*.fastq.gz $TMPDIR
+cd $TMPDIR
+for i in 1 2; do
+fastqc -t 2 SRR10_${i}.fastq.gz &
+fastqc -t 2 SRR11_${i}.fastq.gz &
+done
+wait
+cd $SLURM_SUBMIT_DIR
+mkdir fastqc
+cp -r $TMPDIR/*.html fastqc
+cp -r $TMPDIR/*.zip fastqc
+
+
+##################################################################
+# indexing genome
+##################################################################
+#!/bin/bash
+#SBATCH --account=acc_name
+#SBATCH --job-name=bismark_genome_preparation
+#SBATCH --time=02:00:00
+#SBATCH --nodes=1 --ntasks-per-node=8
+module use $HOME/local/share/lmodfiles
+ml bowtie2/2.4.1 bismark/0.22.3 samtools/1.10
+cd $SLURM_SUBMIT_DIR
+bismark_genome_preparation --path_to_aligner /apps/bowtie2/2.4.1/ --verbose /path/to/genome/ --parallel 4
+
+
+##################################################################
+# Trimming, QC, alignment, & post-alignment
+##################################################################
+#!/bin/bash
+#SBATCH --account=acc_name
+#SBATCH --job-name=trim_galore_fastqc_bismark_dedup_met
+#SBATCH --time=30:00:00
+#SBATCH --nodes=1 --ntasks-per-node=40
+#SBATCH --gres=pfsdir:ess
+module use $HOME/local/share/lmodfiles
+ml fastqc/0.11.8 python/3.7-2019.10 trim_galore/0.6.6 bowtie2/2.4.1 bismark/0.22.3 samtools/1.10 perl/5.26.1
+export PATH=/users/PAS1740/jsahn25/.local/bin:$PATH
+cd $SLURM_SUBMIT_DIR
+mkdir -p trim_galore/fastqc
+cp SRR*_*.fastq.gz $PFSDIR
+cd $PFSDIR
+for i in 10 11; do
+trim_galore --fastqc -j 4 \
+--path_to_cutadapt /path/to/cutadapt \
+--paired SRR${i}_1.fastq.gz SRR${i}_2.fastq.gz
+done
+cp -r $PFSDIR/*.txt $SLURM_SUBMIT_DIR/trim_galore/fastqc
+cp -r $PFSDIR/*.html $SLURM_SUBMIT_DIR/trim_galore/fastqc
+cp -r $PFSDIR/*.zip $SLURM_SUBMIT_DIR/trim_galore/fastqc
+cp -r $PFSDIR/*.fq.gz $SLURM_SUBMIT_DIR/trim_galore
+
+for i in 10 11; do
+bismark --parallel 10 -o bismark --temp_dir $PFSDIR \
+/path/to/genome/ \
+-1 SRR${i}_1_val_1.fq.gz -2 SRR${i}_2_val_2.fq.gz
+done
+
+cd bismark
+for i in 10 11; do
+deduplicate_bismark -p --bam SRR${i}_1_val_1_bismark_bt2_pe.bam
+
+bismark_methylation_extractor \
+-p --gzip --parallel 10 --bedGraph --buffer_size 20G \
+SRR${i}_1_val_1_bismark_bt2_pe.deduplicated.bam
+done
+
+cd $SLURM_SUBMIT_DIR
+mkdir -p trim_galore/bismark/methylation_extractor
+cp -r $PFSDIR/bismark/*.bam trim_galore/bismark
+cp -r $PFSDIR/bismark/*report.txt trim_galore/bismark
+cp -r $PFSDIR/bismark/*deduplication_report.txt trim_galore/bismark
+cp -r $PFSDIR/bismark/*.gz trim_galore/bismark/methylation_extractor
+cp -r $PFSDIR/bismark/*M-bias.txt trim_galore/bismark/methylation_extractor
+cp -r $PFSDIR/bismark/*splitting_report.txt trim_galore/bismark/methylation_extractor
+
+
+
